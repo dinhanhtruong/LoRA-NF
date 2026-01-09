@@ -1,0 +1,23 @@
+name: lora-env
+channels:
+  - defaults
+dependencies:
+  - pytorch
+  - pytorch-cuda=12.4
+  - torchaudio
+  - torchvision
+  - matplotlib
+  - ninja
+  - numpy
+  - opencv
+  - packaging
+  - pandas
+  - pip
+  - python
+  - rich
+  - scipy
+  - tensorboardx
+  - tqdm
+  - trimesh
+  - commentjson
+  - conda-forge::wandb
