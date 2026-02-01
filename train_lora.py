@@ -129,7 +129,8 @@ def train_lora_regression(
             elapsed_time = time.perf_counter() - prev_time
             print(f"Step#{i}: loss={curr_loss:.7f} time={int(elapsed_time)}[s]")
             if save_dir:
-                target_sampler.save_model_output(lora_nf, save_path=f"{save_dir}/lora_nf_step_{i:05d}")
+                with torch.no_grad():
+                    target_sampler.save_model_output(lora_nf, save_path=f"{save_dir}/lora_nf_step_{i:05d}")
 
             if curr_loss < best_loss:
                 print(f"decreased {best_loss:.6f}-->{curr_loss:.6f}")
@@ -215,7 +216,8 @@ def train_base_model(
             elapsed_time = time.perf_counter() - prev_time
             print(f"Step#{i}: loss={curr_loss:.7f} time={int(elapsed_time)}[s]")
             if save_dir:
-                data_sampler.save_model_output(base_nf, save_path=f"{save_dir}/base_nf_step_{i:05d}")
+                with torch.no_grad():
+                    data_sampler.save_model_output(base_nf, save_path=f"{save_dir}/base_nf_step_{i:05d}")
 
             if curr_loss < best_loss:
                 print(f"decreased {best_loss:.6f}-->{curr_loss:.6f}")
