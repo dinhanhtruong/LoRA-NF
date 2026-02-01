@@ -1,9 +1,9 @@
-name: lora-env
+name: lora-nf
 channels:
   - defaults
 dependencies:
   - pytorch
-  - pytorch-cuda=12.4
+  # - pytorch-cuda=12.4
   - torchaudio
   - torchvision
   - matplotlib
@@ -18,6 +18,6 @@ dependencies:
   - scipy
   - tensorboardx
   - tqdm
-  - trimesh
-  - commentjson
-  - conda-forge::wandb
+  # - trimesh
+  # - commentjson
+  # - conda-forge::wandb

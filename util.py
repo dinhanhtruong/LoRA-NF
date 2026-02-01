@@ -6,17 +6,55 @@ import mcubes
 import numpy as np
 import packaging
 import torch
-from scripts.common import read_image
+from scripts.common import read_image, write_image
 import trimesh
 import pysdf
 
-class Image(torch.nn.Module):
+class DataSampler:
+    def sample_batch(self, n_samples: int):
+        """
+        samples input positions and corresponding field values
+        
+        Args
+            - n_samples: number of samples
+
+        Returns:
+            - inputs: sample positions. torch tensor of shape [n_samples, data_input_dim], e.g., [n_samples, 2] for image xy positions
+            - targets: values of the field sampled at inputs. torch tensor of shape [n_samples, data_output_dim], e.g., [n_samples, 3] for image RGB values
+        """
+        raise NotImplementedError
+    def save_model_output(self, model: torch.nn.Module, save_path: str):
+        """
+        saves a reconstruction of the given neural field at the given path (without extension). assumes that the directory exists
+
+        Args: 
+            - model: a neural field nn.Module()
+        
+        Returns nothing
+        """
+        raise NotImplementedError
+    
+class Image(DataSampler, torch.nn.Module):
     def __init__(self, filename, device):
-        super(Image, self).__init__()
+        super().__init__()
         self.data = read_image(filename)
+        # remove alpha channel
+        if self.data.ndim > 2 and self.data.shape[2] == 4:
+            self.data = self.data[:,:,:3] # keep RGB
         self.orig_data_npy = self.data
         self.shape = self.data.shape
         self.data = torch.from_numpy(self.data).float().to(device)
+
+        # for model output reconsturction
+        resolution = self.data.shape[0:2]
+        # n_pixels = resolution[0] * resolution[1]
+        half_dx =  0.5 / resolution[0] # half pixel size
+        half_dy =  0.5 / resolution[1]
+        xs = torch.linspace(half_dx, 1-half_dx, resolution[0])
+        ys = torch.linspace(half_dy, 1-half_dy, resolution[1])
+        xv, yv = torch.meshgrid([xs, ys], indexing="ij")
+        self.img_shape = resolution + torch.Size([self.data.shape[2]])
+        self.xy = torch.stack((yv.flatten(), xv.flatten())).t()
 
     def forward(self, xs, interpolate=True):
         with torch.no_grad():
@@ -42,7 +80,16 @@ class Image(torch.nn.Module):
                 )
             
             return (self.data[y0, x0]) # no interpolation
-        
+    
+    def sample_batch(self, n_samples):
+        input_xy = torch.rand([n_samples, 2], dtype=torch.float) 
+        image_rgb = self.forward(input_xy)
+        return input_xy, image_rgb
+
+    def save_model_output(self, model, save_path):
+        write_image(f"{save_path}.png", model(self.xy).reshape(self.img_shape).clamp(0.0, 1.0).detach().cpu().numpy())
+
+
 class SDFDataset():
     def __init__(self, path, device, num_samples=2**18, clip_sdf=None, transformation_save_dir=""):
         super().__init__()
