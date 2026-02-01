@@ -18,7 +18,8 @@ import torch.nn as nn
 class CustomFrequencyEncoding(nn.Module):
     def __init__(self):
         super(CustomFrequencyEncoding, self).__init__()
-
+    def get_encoding_output_dim(self, input_dim):
+        return self.forward(torch.zeros((1, input_dim))).shape[-1]
 
     def forward( # from https://github.com/krrish94/nerf-pytorch/blob/master/nerf/nerf_helpers.py
         self, tensor, num_encoding_functions=10, include_input=True, log_sampling=True
@@ -35,8 +36,6 @@ class CustomFrequencyEncoding(nn.Module):
         Returns:
         (torch.Tensor): Positional encoding of the input tensor.
         """
-        # TESTED
-        # Trivially, the input tensor is added to the positional encoding.
         encoding = [tensor] if include_input else []
         frequency_bands = None
         if log_sampling:

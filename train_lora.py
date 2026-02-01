@@ -13,7 +13,7 @@ import time
 import torch
 import copy
 import torch.nn as nn
-from custom_modules import MLP, LoRA_MLP, extract_linear_layers
+from custom_modules import MLP, LoRA_MLP, extract_linear_layers, CustomFrequencyEncoding
 from util import DataSampler, SDFDataset, listdir_by_time, edit_region_percentage_to_normalized_bounds, mape_loss, mean_relative_l2, save_mesh, sort_files_with_number_at_end, Image
 # import wandb
 from scripts.common import read_image, write_image
@@ -133,7 +133,7 @@ def train_lora_regression(
                     target_sampler.save_model_output(lora_nf, save_path=f"{save_dir}/lora_nf_step_{i:05d}")
 
             if curr_loss < best_loss:
-                print(f"decreased {best_loss:.6f}-->{curr_loss:.6f}")
+                print(f"\tdecreased {best_loss:.6f}-->{curr_loss:.6f}")
                 best_loss = curr_loss
                 periods_no_improve = 0 # reset
                 best_lora_nf = copy.deepcopy(lora_nf)
@@ -220,7 +220,7 @@ def train_base_model(
                     data_sampler.save_model_output(base_nf, save_path=f"{save_dir}/base_nf_step_{i:05d}")
 
             if curr_loss < best_loss:
-                print(f"decreased {best_loss:.6f}-->{curr_loss:.6f}")
+                print(f"\tdecreased {best_loss:.6f}-->{curr_loss:.6f}")
                 best_loss = curr_loss
                 periods_no_improve = 0 # reset
                 best_model = copy.deepcopy(base_nf)
@@ -251,14 +251,17 @@ def train_base_model(
     return best_model
 
 def image_demo():
+    
     save_dir = "checkpoints/minimal"
     base_image_path= "data/images/table/table_before.png"
     target_image_path= "data/images/table/table_after.png"
     device = "cpu"
 
     # set up base model
+    pos_enc = CustomFrequencyEncoding()
     base_nf = nn.Sequential(
-        nn.Linear(2, 32), # xy input TODO pos enc
+        pos_enc,
+        nn.Linear(pos_enc.get_encoding_output_dim(2), 32), # xy input TODO pos enc
         nn.ReLU(),        
         nn.Linear(32, 32), 
         nn.ReLU(),        
@@ -275,7 +278,7 @@ def image_demo():
     target_image_sampler = Image(target_image_path, device)
     lora_rank = 3
 
-    breakpoint()
+    # breakpoint()
     lora_weights, lora_nf = train_lora_regression(base_nf, target_image_sampler, loss_fn, lora_rank, save_dir=save_dir, max_n_steps=5000) # TEMP save dir
     breakpoint()
 
