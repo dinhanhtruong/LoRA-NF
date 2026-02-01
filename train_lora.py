@@ -128,6 +128,8 @@ def train_lora_regression(
             curr_loss = loss.item()
             elapsed_time = time.perf_counter() - prev_time
             print(f"Step#{i}: loss={curr_loss:.7f} time={int(elapsed_time)}[s]")
+            if save_dir:
+                target_sampler.save_model_output(lora_nf, save_path=f"{save_dir}/lora_nf_step_{i:05d}")
 
             if curr_loss < best_loss:
                 print(f"decreased {best_loss:.6f}-->{curr_loss:.6f}")
@@ -151,8 +153,13 @@ def train_lora_regression(
             if i > 0 and log_interval < 1000: # TEMP
                 log_interval *= 10
     if save_dir:
+        torch.save({
+            'step': i,
+            'model_state_dict': best_lora_nf.state_dict(),
+            'loss': curr_loss,
+        }, f"{save_dir}/lora_nf_best.pt")
         target_sampler.save_model_output(best_lora_nf, save_path=f"{save_dir}/lora_nf_best")
-    
+        
     return best_lora_nf.get_lora_weights(), best_lora_nf.as_sequential()
 
 def train_base_model(
@@ -207,6 +214,8 @@ def train_base_model(
             curr_loss = loss.item()
             elapsed_time = time.perf_counter() - prev_time
             print(f"Step#{i}: loss={curr_loss:.7f} time={int(elapsed_time)}[s]")
+            if save_dir:
+                data_sampler.save_model_output(base_nf, save_path=f"{save_dir}/base_nf_step_{i:05d}")
 
             if curr_loss < best_loss:
                 print(f"decreased {best_loss:.6f}-->{curr_loss:.6f}")
@@ -230,8 +239,13 @@ def train_base_model(
             if i > 0 and log_interval < 1000: # TEMP
                 log_interval *= 10
     if save_dir:
-        data_sampler.save_model_output(best_model, save_path=f"{save_dir}/base_nf")
-    
+        data_sampler.save_model_output(best_model, save_path=f"{save_dir}/base_nf_best")
+        torch.save({
+            'step': i,
+            'model_state_dict': best_model.state_dict(),
+            'loss': curr_loss,
+        }, f"{save_dir}/base_nf_best.pt")
+
     return best_model
 
 def image_demo():
@@ -242,15 +256,17 @@ def image_demo():
 
     # set up base model
     base_nf = nn.Sequential(
-        nn.Linear(2, 10), # xy input TODO pos enc
-        # nn.ReLU(),        
-        nn.Linear(10, 10), 
+        nn.Linear(2, 32), # xy input TODO pos enc
         nn.ReLU(),        
-        nn.Linear(10, 3), # RGB output 
+        nn.Linear(32, 32), 
+        nn.ReLU(),        
+        nn.Linear(32, 32), 
+        nn.ReLU(),        
+        nn.Linear(32, 3), # RGB output 
     )
     base_image_sampler = Image(base_image_path, device)
     loss_fn = mean_relative_l2 
-    base_nf = train_base_model(base_nf, base_image_sampler, loss_fn, save_dir=save_dir, max_n_steps=100)
+    base_nf = train_base_model(base_nf, base_image_sampler, loss_fn, save_dir=save_dir, max_n_steps=10000)
     
     #########################
     # train lora
@@ -258,7 +274,7 @@ def image_demo():
     lora_rank = 3
 
     breakpoint()
-    lora_weights, lora_nf = train_lora_regression(base_nf, target_image_sampler, loss_fn, lora_rank, save_dir=save_dir, max_n_steps=100) # TEMP save dir
+    lora_weights, lora_nf = train_lora_regression(base_nf, target_image_sampler, loss_fn, lora_rank, save_dir=save_dir, max_n_steps=5000) # TEMP save dir
     breakpoint()
 
 # ### LORA EDITING ###
