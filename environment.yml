@@ -21,3 +21,8 @@ dependencies:
   # - trimesh
   # - commentjson
   # - conda-forge::wandb
+  - pip:
+      - PyMCubes
+      - imageio
+      - trimesh
+      - pysdf
