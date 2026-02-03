@@ -5,10 +5,13 @@ import packaging
 import torch
 import trimesh
 
+def get_device(module):
+    try:
+        return next(module.parameters()).device
+    except StopIteration:
+        return next(module.buffers()).device
 
-
-# borrowed from scikit-image
-def check_shape_equality(*images):
+def check_shape_equality(*images): # borrowed from scikit-image
     """Check that all images have the same shape"""
     image0 = images[0]
     if not all(image0.shape == image.shape for image in images[1:]):

@@ -1,25 +1,19 @@
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3,4,5,6,7"
 import random
 import numpy as np
 import time
 import torch
 import copy
 import torch.nn as nn
-from custom_modules import LoRA_MLP, extract_linear_layers, CustomFrequencyEncoding
-from util import mean_relative_l2
-from data_samplers import DataSampler, Image, SDF
+from .torch_modules import LoRA_MLP, extract_linear_layers
+from .util import get_device
+from .data_samplers import DataSampler
 from typing import Callable
 
 torch.manual_seed(0)
 np.random.seed(0)
 random.seed(0)
 
-def get_device(module):
-    try:
-        return next(module.parameters()).device
-    except StopIteration:
-        return next(module.buffers()).device
 
 def train_lora_regression(
         base_nf: nn.Sequential, 
@@ -105,13 +99,6 @@ def train_lora_regression(
                 best_loss = curr_loss
                 periods_no_improve = 0 # reset
                 best_lora_nf = copy.deepcopy(lora_nf)
-                # weights_filename = "lora_weights.pt"
-                # print(f"saving model at {checkpoint_dir}/{save_dirname}")
-                # torch.save({ # TEMP
-                #     'step': i,
-                #     'model_state_dict': mlp.lora_mlps.state_dict(),
-                #     'loss': curr_loss,
-                # }, f"{checkpoint_dir}/{save_dirname}/{weights_filename}")
             else:
                 # early stopping if no improvement for several epochs
                 periods_no_improve += 1
@@ -119,7 +106,7 @@ def train_lora_regression(
                     print(f"Early stopping at step {i} with loss {curr_loss}")
                     break
             prev_time = time.perf_counter()
-            if i > 0 and log_interval < 1000: # TEMP
+            if i > 0 and log_interval < 1000: 
                 log_interval *= 10
     if save_dir:
         torch.save({
@@ -176,8 +163,6 @@ def train_base_model(
         optimizer.step()
         if scheduler:
             scheduler.step()
-        # if i % 30 == 0: # TEMP
-        #     print(f"{i}: {loss.item()}")
 
         if i % log_interval == 0: # reconstruct output
             curr_loss = loss.item()
@@ -192,13 +177,6 @@ def train_base_model(
                 best_loss = curr_loss
                 periods_no_improve = 0 # reset
                 best_model = copy.deepcopy(base_nf)
-                # weights_filename = "lora_weights.pt"
-                # print(f"saving model at {checkpoint_dir}/{save_dirname}")
-                # torch.save({ # TEMP
-                #     'step': i,
-                #     'model_state_dict': mlp.lora_mlps.state_dict(),
-                #     'loss': curr_loss,
-                # }, f"{checkpoint_dir}/{save_dirname}/{weights_filename}")
             else:
                 # early stopping if no improvement for several epochs
                 periods_no_improve += 1
@@ -206,7 +184,7 @@ def train_base_model(
                     print(f"Early stopping at step {i} with loss {curr_loss}")
                     break
             prev_time = time.perf_counter()
-            if i > 0 and log_interval < 1000: # TEMP
+            if i > 0 and log_interval < 1000: 
                 log_interval *= 10
     if save_dir:
         data_sampler.save_model_output(best_model, save_path=f"{save_dir}/base_nf_best")
@@ -218,48 +196,3 @@ def train_base_model(
 
     return best_model
 
-def image_demo():
-    # demo for using LoRA to encode an image edit
-    save_dir = "checkpoints/minimal"
-    base_image_path= "data/images/table/table_before.png"
-    target_image_path= "data/images/table/table_after.png"
-    device = torch.device("cuda:0")
-
-    # set up base model
-    pos_enc = CustomFrequencyEncoding()
-    base_nf = nn.Sequential(
-        pos_enc,
-        nn.Linear(pos_enc.get_encoding_output_dim(2), 128), 
-        nn.ReLU(),        
-        nn.Linear(128, 128), 
-        nn.ReLU(),         
-        nn.Linear(128, 128), 
-        nn.ReLU(),         
-        nn.Linear(128, 128), 
-        nn.ReLU(),         
-        nn.Linear(128, 128), 
-        nn.ReLU(),         
-        nn.Linear(128, 3), # RGB output 
-    )
-    base_nf.to(device)
-    base_data_sampler = Image(base_image_path, device)
-    loss_fn = mean_relative_l2 
-    base_nf = train_base_model(base_nf, base_data_sampler, loss_fn, save_dir=save_dir, max_n_steps=100000)
-    
-    #########################
-    # train lora
-    target_data_sampler = Image(target_image_path, get_device(base_nf))   # SDF(target_geometry_path, device) 
-    lora_rank = 16
-
-    # breakpoint()
-    lora_weights, lora_nf = train_lora_regression(base_nf, target_data_sampler, loss_fn, lora_rank, save_dir=save_dir, max_n_steps=30000)
-    breakpoint()
-
-
-if __name__ == "__main__":
-    print(f"Using PyTorch version {torch.__version__} with CUDA {torch.version.cuda}")
-    torch.set_printoptions(precision=7)
-    try: 
-        image_demo()
-    except KeyboardInterrupt:
-        print("\nCtrl+C pressed. Exiting...")

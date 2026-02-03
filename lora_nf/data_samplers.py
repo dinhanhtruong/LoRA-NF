@@ -1,9 +1,9 @@
 import os
 import numpy as np
 import torch
-from scripts.common import read_image, write_image
+from .common import read_image, write_image
 import trimesh
-from util import save_mesh
+from .util import save_mesh
 import pysdf
 
 class DataSampler:

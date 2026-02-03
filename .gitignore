@@ -1,0 +1,6 @@
+checkpoints/
+__pycache__/
+*.DS_Store
+activation_distributions/
+*.egg-info/
+build/
