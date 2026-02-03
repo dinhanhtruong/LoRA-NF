@@ -4,3 +4,4 @@ __pycache__/
 activation_distributions/
 *.egg-info/
 build/
+dist/
