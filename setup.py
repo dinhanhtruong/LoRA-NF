@@ -2,13 +2,13 @@ from setuptools import setup
 
 setup(
     name='lora-nf',
-    version='0.1.0',    
+    version='0.1.1',    
     description='Low-Rank Adaptation of Neural Fields',
     url='https://github.com/dinhanhtruong/LoRA-NF',
     author='Anh Truong',
     license='MIT License',
     packages=['lora_nf'],
-    install_requires=['pytorch',
+    install_requires=['torch',
                       'numpy',                     
                       'imageio',                     
                       'trimesh',                     
