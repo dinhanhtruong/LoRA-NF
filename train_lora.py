@@ -168,10 +168,10 @@ def train_base_model(
         base_nf: nn.Sequential, 
         data_sampler: DataSampler, 
         loss_fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor], 
-        learning_rate=5e-3, 
+        learning_rate=1e-4, 
         batch_size=2**18, 
-        max_n_steps=30000, 
-        lr_scheduler_warmup_steps=7000, 
+        max_n_steps=100000, 
+        lr_scheduler_warmup_steps=0, 
         log_interval=100,
         convergence_patience=15,
         save_dir="",
@@ -262,7 +262,7 @@ def image_demo():
     pos_enc = CustomFrequencyEncoding()
     base_nf = nn.Sequential(
         pos_enc,
-        nn.Linear(pos_enc.get_encoding_output_dim(2), 32), # xy input TODO pos enc
+        nn.Linear(pos_enc.get_encoding_output_dim(2), 128), 
         nn.ReLU(),        
         nn.Linear(128, 128), 
         nn.ReLU(),         
