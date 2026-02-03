@@ -41,6 +41,7 @@ def image_demo():
 
     lora_weights, lora_nf = train_lora_regression(base_nf, target_data_sampler, loss_fn, lora_rank, save_dir=save_dir, max_n_steps=30000)
     
+    print("Done!")
 
 if __name__ == "__main__":
     # this should be run from the project root
