@@ -252,7 +252,7 @@ def train_base_model(
     return best_model
 
 def image_demo():
-    
+    # demo for using LoRA to encode an image edit
     save_dir = "checkpoints/minimal"
     base_image_path= "data/images/table/table_before.png"
     target_image_path= "data/images/table/table_after.png"
@@ -264,18 +264,20 @@ def image_demo():
         pos_enc,
         nn.Linear(pos_enc.get_encoding_output_dim(2), 32), # xy input TODO pos enc
         nn.ReLU(),        
-        nn.Linear(32, 32), 
-        nn.ReLU(),        
-        nn.Linear(32, 32), 
-        nn.ReLU(),        
-        nn.Linear(32, 3), # RGB output 
+        nn.Linear(128, 128), 
+        nn.ReLU(),         
+        nn.Linear(128, 128), 
+        nn.ReLU(),         
+        nn.Linear(128, 128), 
+        nn.ReLU(),         
+        nn.Linear(128, 128), 
+        nn.ReLU(),         
+        nn.Linear(128, 3), # RGB output 
     )
     base_nf.to(device)
-    print("specified device: ", device)
-    print("base nf device: ", get_device(base_nf))
     base_data_sampler = Image(base_image_path, device)
     loss_fn = mean_relative_l2 
-    base_nf = train_base_model(base_nf, base_data_sampler, loss_fn, save_dir=save_dir, max_n_steps=2000)
+    base_nf = train_base_model(base_nf, base_data_sampler, loss_fn, save_dir=save_dir, max_n_steps=100000)
     
     #########################
     # train lora
@@ -283,7 +285,8 @@ def image_demo():
     lora_rank = 3
 
     # breakpoint()
-    lora_weights, lora_nf = train_lora_regression(base_nf, target_data_sampler, loss_fn, lora_rank, save_dir=save_dir, max_n_steps=5000) # TEMP save dir
+    lora_weights, lora_nf = train_lora_regression(base_nf, target_data_sampler, loss_fn, lora_rank, save_dir=save_dir, max_n_steps=30000)
+    
     breakpoint()
 
 # ### LORA EDITING ###
