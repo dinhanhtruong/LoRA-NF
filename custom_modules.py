@@ -4,21 +4,22 @@ import sys
 import numpy as np
 import torch
 import torch.nn as nn
-try:
-    import tinycudann as tcnn
-except ImportError:
-    print("This sample requires the tiny-cuda-nn extension for PyTorch.")
-    print("You can install it by running:")
-    print("============================================================")
-    print("tiny-cuda-nn$ cd bindings/torch")
-    print("tiny-cuda-nn/bindings/torch$ python setup.py install")
-    print("============================================================")
-    sys.exit()
+# try:
+#     import tinycudann as tcnn
+# except ImportError:
+#     print("This sample requires the tiny-cuda-nn extension for PyTorch.")
+#     print("You can install it by running:")
+#     print("============================================================")
+#     print("tiny-cuda-nn$ cd bindings/torch")
+#     print("tiny-cuda-nn/bindings/torch$ python setup.py install")
+#     print("============================================================")
+#     sys.exit()
 
 class CustomFrequencyEncoding(nn.Module):
     def __init__(self):
         super(CustomFrequencyEncoding, self).__init__()
-
+    def get_encoding_output_dim(self, input_dim):
+        return self.forward(torch.zeros((1, input_dim))).shape[-1]
 
     def forward( # from https://github.com/krrish94/nerf-pytorch/blob/master/nerf/nerf_helpers.py
         self, tensor, num_encoding_functions=10, include_input=True, log_sampling=True
@@ -35,8 +36,6 @@ class CustomFrequencyEncoding(nn.Module):
         Returns:
         (torch.Tensor): Positional encoding of the input tensor.
         """
-        # TESTED
-        # Trivially, the input tensor is added to the positional encoding.
         encoding = [tensor] if include_input else []
         frequency_bands = None
         if log_sampling:
@@ -182,107 +181,159 @@ class MLP(nn.Module):
         return  base_linear(x) + torch.bmm(x.unsqueeze(1), lora_matrix).squeeze(1) *lora_scaling
         
     
+# class LoRA_MLP(nn.Module):
+#     def __init__(self, parent_mlp, region_index, rank, num_active_layers_from_end="all", shared_A_matrices=None, prev_frame_lora_paths=[], device=None):
+#         '''
+#         LoRA-augmented MLP responsible for a sub-region of the parent's spatial range 
+
+#         prev_frame_lora_paths: list of chronologically ordered filepaths to prev frames' LoraMLP weights 
+#         '''
+#         super(LoRA_MLP, self).__init__()
+#         self.region_index = region_index
+#         if prev_frame_lora_paths:
+#             prev_frame_loras = [torch.load(path, weights_only=True) for path in prev_frame_lora_paths] # list of LoRA_MLP state dicts
+
+#         # for each parent MLP linear layer, store a low-rank adaptor (LoRALinear layer).
+#         # mimic parent MLP but replace linear with LoRALinear
+#         self.lora_layers =  nn.ModuleDict()
+#         assert num_active_layers_from_end == "all" or num_active_layers_from_end > 0
+#         first_lora_layer_idx = 0 
+#         if num_active_layers_from_end != "all":
+#             first_lora_layer_idx = parent_mlp.get_num_linear_layers() - num_active_layers_from_end
+
+#         linear_layer_idx = 0
+#         for global_layer_idx, parent_layer in enumerate(parent_mlp.layers):
+#             if isinstance(parent_layer, nn.Linear):
+#                 # add lora layer
+#                 if linear_layer_idx >= first_lora_layer_idx:
+#                     A = None if shared_A_matrices is None else shared_A_matrices[linear_layer_idx]
+#                     prev_frame_lora_matrices = []
+#                     if prev_frame_lora_paths:
+#                         for prev_frame_lora in prev_frame_loras:
+#                             curr_A = prev_frame_lora["model_state_dict"][f"0.lora_layers.{global_layer_idx}.A"]
+#                             curr_B = prev_frame_lora["model_state_dict"][f"0.lora_layers.{global_layer_idx}.B"]
+#                             if device is not None:
+#                                 curr_A = curr_A.to(device)
+#                                 curr_B = curr_B.to(device)
+#                             prev_frame_lora_matrices.append(curr_A @ curr_B)
+#                     self.lora_layers[str(global_layer_idx)] = LoRALinear(parent_layer, r=rank, A=A, prev_frame_lora_matrices=prev_frame_lora_matrices)
+#                 linear_layer_idx += 1
+
+#         # print("lora mlp: \n", self.layers)
+
+#     def get_mean_abs_lora_weight(self):
+#         # for each linear layer:
+#             # store mean(abs(W))
+#         # average at end
+#         mean_abs_weights = []
+#         for layer in self.lora_layers.values():
+#             assert isinstance(layer, LoRALinear)
+#             delta_w = layer.A @ layer.B
+#             mean_abs_weights.append(torch.mean(torch.abs(delta_w)))
+#         return torch.mean(torch.tensor(mean_abs_weights))
+
+
+#     def forward(self, x, parent_mlp, use_pos_enc, lora_weight=1):
+#         for i, parent_layer in enumerate(parent_mlp.layers):
+#             if str(i) in self.lora_layers:
+#                 # apply lora linear forward (this linear layer is active)
+#                 x = self.lora_layers[str(i)](x, parent_layer, lora_weight)
+#             else:
+#                 # apply base mlp layer (non-linearities or lora-inactive layers) 
+#                 x = parent_layer(x)
+#         return x
+
+
+
+########################
+
 class LoRA_MLP(nn.Module):
-    def __init__(self, parent_mlp, region_index, rank, num_active_layers_from_end="all", shared_A_matrices=None, prev_frame_lora_paths=[], device=None):
+    def __init__(self, base_mlp, rank):
         '''
-        LoRA-augmented MLP responsible for a sub-region of the parent's spatial range 
+        LoRA-augmented MLP 
 
         prev_frame_lora_paths: list of chronologically ordered filepaths to prev frames' LoraMLP weights 
         '''
         super(LoRA_MLP, self).__init__()
-        self.region_index = region_index
-        if prev_frame_lora_paths:
-            prev_frame_loras = [torch.load(path, weights_only=True) for path in prev_frame_lora_paths] # list of LoRA_MLP state dicts
 
         # for each parent MLP linear layer, store a low-rank adaptor (LoRALinear layer).
         # mimic parent MLP but replace linear with LoRALinear
-        self.lora_layers =  nn.ModuleDict()
-        assert num_active_layers_from_end == "all" or num_active_layers_from_end > 0
-        first_lora_layer_idx = 0 
-        if num_active_layers_from_end != "all":
-            first_lora_layer_idx = parent_mlp.get_num_linear_layers() - num_active_layers_from_end
+        self.sequential = nn.Sequential() # just LoRALinears
 
-        linear_layer_idx = 0
-        for global_layer_idx, parent_layer in enumerate(parent_mlp.layers):
-            if isinstance(parent_layer, nn.Linear):
+        for base_layer in base_mlp:
+            if isinstance(base_layer, nn.Linear):
                 # add lora layer
-                if linear_layer_idx >= first_lora_layer_idx:
-                    A = None if shared_A_matrices is None else shared_A_matrices[linear_layer_idx]
-                    prev_frame_lora_matrices = []
-                    if prev_frame_lora_paths:
-                        for prev_frame_lora in prev_frame_loras:
-                            curr_A = prev_frame_lora["model_state_dict"][f"0.lora_layers.{global_layer_idx}.A"]
-                            curr_B = prev_frame_lora["model_state_dict"][f"0.lora_layers.{global_layer_idx}.B"]
-                            if device is not None:
-                                curr_A = curr_A.to(device)
-                                curr_B = curr_B.to(device)
-                            prev_frame_lora_matrices.append(curr_A @ curr_B)
-                    self.lora_layers[str(global_layer_idx)] = LoRALinear(parent_layer, r=rank, A=A, prev_frame_lora_matrices=prev_frame_lora_matrices)
-                linear_layer_idx += 1
-
-        # print("lora mlp: \n", self.layers)
-
-    def get_mean_abs_lora_weight(self):
-        # for each linear layer:
-            # store mean(abs(W))
-        # average at end
-        mean_abs_weights = []
-        for layer in self.lora_layers.values():
-            assert isinstance(layer, LoRALinear)
-            delta_w = layer.A @ layer.B
-            mean_abs_weights.append(torch.mean(torch.abs(delta_w)))
-        return torch.mean(torch.tensor(mean_abs_weights))
+                self.sequential.append(LoRALinear(base_layer, r=rank))
+            else:
+                # keep parent layer (activation or positional encoding)
+                self.sequential.append(base_layer)
+  
+    def as_sequential(self):
+        return self.sequential
+    def get_lora_weights(self):
+        """
+        Returns a list of tensors of weights corresponding to the current LoRAs (in the same order as the base model's)
+        """
+        lora_weights = []
+        for lora_mlp_layer in self.sequential:
+            if isinstance(lora_mlp_layer, LoRALinear):
+                lora_weights.append((lora_mlp_layer.A @ lora_mlp_layer.B).T) # [in_features, out_features]
+        return lora_weights
 
 
-    def forward(self, x, parent_mlp, use_pos_enc, lora_weight=1):
+    # def get_mean_abs_lora_weight(self):
+    #     # for each linear layer:
+    #         # store mean(abs(W))
+    #     # average at end
+    #     mean_abs_weights = []
+    #     for layer in self.sequential.values():
+    #         assert isinstance(layer, LoRALinear)
+    #         delta_w = layer.A @ layer.B
+    #         mean_abs_weights.append(torch.mean(torch.abs(delta_w)))
+    #     return torch.mean(torch.tensor(mean_abs_weights))
+
+
+    def forward(self, x):
+        return self.sequential(x)
+
         for i, parent_layer in enumerate(parent_mlp.layers):
-            if str(i) in self.lora_layers:
+            if str(i) in self.sequential:
                 # apply lora linear forward (this linear layer is active)
-                x = self.lora_layers[str(i)](x, parent_layer, lora_weight)
+                x = self.sequential[str(i)](x, parent_layer, lora_weight)
             else:
                 # apply base mlp layer (non-linearities or lora-inactive layers) 
                 x = parent_layer(x)
         return x
+    
 
 class LoRALinear(nn.Module):
-    def __init__(self, linear, r=16, alpha=1, A=None, prev_frame_lora_matrices=[]):
+    def __init__(self, base_linear, r=16, alpha=1, A=None):
         '''
-        prev_frame_loras: list of n_prev_frames AB matrices. list of [in_feat, out_feat]
+        
         '''
         super(LoRALinear, self).__init__()
-        assert isinstance(linear, nn.Linear)
+        assert isinstance(base_linear, nn.Linear) and r > 1
+        self.base_linear = base_linear
+        # freeze base; make sure only lora weights are trainable
+        self.base_linear.weight.requires_grad_(False)
+        if self.base_linear.bias is not None:
+            self.base_linear.bias.requires_grad_(False)
 
-        rank = min(r, linear.in_features, linear.out_features)
-        # the low rank trainable parameters
+        rank = min(r, base_linear.in_features, base_linear.out_features)
         if A is not None:
-        # use shared, fixed A matrix
-            assert A.shape == torch.Size((linear.in_features, rank))
+        # use specified A matrix
+            assert A.shape == torch.Size((base_linear.in_features, rank))
             self.A = A
         else:
-            self.A = nn.Parameter(torch.empty((linear.in_features, rank)))
-            nn.init.normal_(self.A, std=1/math.sqrt(linear.in_features)) #following pg4 of https://arxiv.org/pdf/2406.08447 
-        self.B = nn.Parameter(torch.zeros(rank, linear.out_features))
+            self.A = nn.Parameter(torch.empty((base_linear.in_features, rank)))
+            nn.init.normal_(self.A, std=1/math.sqrt(base_linear.in_features)) #following pg4 of https://arxiv.org/pdf/2406.08447 
+        self.B = nn.Parameter(torch.zeros(rank, base_linear.out_features))
         # lora scale factor
         self.scaling = alpha/r
 
-        # cache sum of previous frame loras
-        self.prev_frame_loras_sum = None # [in_feat, out_feat]
-        if prev_frame_lora_matrices:
-            # Sum along stacked dimension and freeze
-            self.prev_frame_loras_sum = self.scaling * torch.sum(torch.stack(prev_frame_lora_matrices), dim=0) # [in_feat, out_feat]
-            
-            self.prev_frame_loras_sum.requires_grad = False
-            print("frobenius norm prev loras: ", torch.linalg.matrix_norm(self.prev_frame_loras_sum).item())
-            # logging: avg along stacked dimension and freeze
-            prev_frame_loras_mean = torch.mean(torch.abs(torch.stack(prev_frame_lora_matrices)), dim=0) # [in_feat, out_feat]
-            print("average elementwise magnitude of prev loras: ", torch.mean(prev_frame_loras_mean).item())
-            
-
-
-    def forward(self, x, linear, lora_weight=1):
-        # the forward pass adds the result of the base linear model and
-        # the adaptor ABx with scaling
-        if self.prev_frame_loras_sum is not None:
-            return  x @ self.prev_frame_loras_sum   + linear(x) + lora_weight*torch.linalg.multi_dot((x, self.A, self.B))*self.scaling
-        return linear(x) + lora_weight*torch.linalg.multi_dot((x, self.A, self.B))*self.scaling
+    def forward(self, x):
+        return self.base_linear(x) + torch.linalg.multi_dot((x, self.A, self.B))*self.scaling
     
+
+def extract_linear_layers(module):
+    return [m for m in module.modules() if isinstance(m, nn.Linear)]
