@@ -1,10 +1,5 @@
 import os
-import re
-import sys
-import matplotlib.pyplot as plt
-import mcubes
 import numpy as np
-import packaging
 import torch
 from scripts.common import read_image, write_image
 import trimesh

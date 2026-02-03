@@ -1,40 +1,11 @@
 import os
-import re
-import sys
-import matplotlib.pyplot as plt
 import mcubes
 import numpy as np
 import packaging
 import torch
-from scripts.common import read_image, write_image
 import trimesh
-import pysdf
 
 
-def listdir_by_time(path, endswith, prepend_path=True):
-    """List files in a directory sorted by modification time."""
-    files = os.listdir(path)
-    files = [f for f in files if f.endswith(endswith)]
-    files_with_mtime = [(f, os.path.getmtime(os.path.join(path, f))) for f in files]
-    files_with_mtime.sort(key=lambda x: x[1])  # Sort by modification time (oldest first)
-    if prepend_path:
-        return [f"{path}/{f[0]}" for f in files_with_mtime]
-    return [f"{f[0]}" for f in files_with_mtime]
-
-def sort_files_with_number_at_end(files):
-    def extract_number(filename):
-        match = re.search(r'(\d+)\D*$', filename)
-        return int(match.group(1)) if match else float('-inf')
-    return sorted(files, key=lambda x: (extract_number(x), x))
-
-def edit_region_percentage_to_normalized_bounds(y_low, y_high, x_low, x_high):
-    """
-    y_low, y_high, x_low, x_high:  coordinates in percentage coord system of image (top left = 0%), i.e. in [0,100]
-    Returns same thing but in [-1,1]^2 normalized coord system
-    """
-    normalized = [(coord/100 - 0.5)*2 for coord in [y_low, y_high, x_low, x_high]]
-    # round to 2 dp
-    return [round(x, 2) for x in normalized]
 
 # borrowed from scikit-image
 def check_shape_equality(*images):
@@ -219,8 +190,6 @@ def get_model_checkpoint_size_mb(checkpoint_path, return_param_count=False):
     return size_model / 1e6
 
 
-
-
 def mean_relative_l2(pred, target, eps=0.01):
     loss = (pred - target.to(pred.dtype))**2 / (pred.detach()**2 + eps)
     return loss.mean()
@@ -235,6 +204,7 @@ def mape_loss(pred, target, reduction='mean'):
         loss = loss.mean()
     
     return loss
+
 
 ### marching cubes helpers from torch-ngp ###
 def custom_meshgrid(*args):
@@ -262,11 +232,7 @@ def extract_fields(bound_min, bound_max, resolution, query_func, device=torch.de
     return u
 
 def extract_geometry(bound_min, bound_max, resolution, threshold, query_func):
-    #print('threshold: {}'.format(threshold))
     u = extract_fields(bound_min, bound_max, resolution, query_func)
-
-    #print(u.shape, u.max(), u.min(), np.percentile(u, 50))
-    
     vertices, triangles = mcubes.marching_cubes(u, threshold)
 
     b_max_np = bound_max.detach().cpu().numpy()

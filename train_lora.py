@@ -1,20 +1,14 @@
 import os
 # os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3,4,5,6,7"
-import argparse
-import datetime
-import json
 import random
-import shutil
-import sys
 import numpy as np
 import time
 import torch
 import copy
 import torch.nn as nn
-from custom_modules import MLP, LoRA_MLP, extract_linear_layers, CustomFrequencyEncoding
-from util import listdir_by_time, edit_region_percentage_to_normalized_bounds, mape_loss, mean_relative_l2, save_mesh, sort_files_with_number_at_end
+from custom_modules import LoRA_MLP, extract_linear_layers, CustomFrequencyEncoding
+from util import mean_relative_l2
 from data_samplers import DataSampler, Image, SDF
-from scripts.common import read_image, write_image
 from typing import Callable
 
 torch.manual_seed(0)
