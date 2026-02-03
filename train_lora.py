@@ -14,7 +14,8 @@ import torch
 import copy
 import torch.nn as nn
 from custom_modules import MLP, LoRA_MLP, extract_linear_layers, CustomFrequencyEncoding
-from util import DataSampler, SDFDataset, listdir_by_time, edit_region_percentage_to_normalized_bounds, mape_loss, mean_relative_l2, save_mesh, sort_files_with_number_at_end, Image
+from util import listdir_by_time, edit_region_percentage_to_normalized_bounds, mape_loss, mean_relative_l2, save_mesh, sort_files_with_number_at_end
+from data_samplers import DataSampler, Image, SDF
 # import wandb
 from scripts.common import read_image, write_image
 # try:
@@ -91,7 +92,8 @@ def train_lora_regression(
     _, dummy_targets = target_sampler.sample_batch(batch_size)
     assert dummy_targets.shape[-1] == base_output_dim, "base_nf and target_sampler are incompatible: output size mismatch"
     assert isinstance(base_nf, nn.Sequential)
-
+    
+    # set up lora neural field
     lora_nf = LoRA_MLP(base_nf, lora_rank)
     device = get_device(base_nf)
     print(f"training LoRA on {device}")
@@ -103,11 +105,11 @@ def train_lora_regression(
     scheduler = None        
     if lr_scheduler_warmup_steps > 0:
         scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, total_iters=lr_scheduler_warmup_steps)
+    # for logging
     best_loss = float('inf')
     best_lora_nf = copy.deepcopy(lora_nf)
     prev_time = time.perf_counter()
     periods_no_improve = 0 # for early stopping
-
     if save_dir:
         os.makedirs(save_dir, exist_ok=True)
 
@@ -121,8 +123,6 @@ def train_lora_regression(
         optimizer.step()
         if scheduler:
             scheduler.step()
-        # if i % 30 == 0: # TEMP
-        #     print(f"{i}: {loss.item()}")
 
         if i % log_interval == 0: # reconstruct output
             curr_loss = loss.item()
@@ -269,17 +269,18 @@ def image_demo():
         nn.ReLU(),        
         nn.Linear(32, 3), # RGB output 
     )
-    base_image_sampler = Image(base_image_path, device)
+    base_nf.to(device)
+    base_data_sampler = Image(base_image_path, device)
     loss_fn = mean_relative_l2 
-    base_nf = train_base_model(base_nf, base_image_sampler, loss_fn, save_dir=save_dir, max_n_steps=10000)
+    base_nf = train_base_model(base_nf, base_data_sampler, loss_fn, save_dir=save_dir, max_n_steps=10000)
     
     #########################
     # train lora
-    target_image_sampler = Image(target_image_path, device)
+    target_data_sampler = Image(target_image_path, get_device(base_nf))   # SDF(target_geometry_path, device) # TODO use base nf device
     lora_rank = 3
 
     # breakpoint()
-    lora_weights, lora_nf = train_lora_regression(base_nf, target_image_sampler, loss_fn, lora_rank, save_dir=save_dir, max_n_steps=5000) # TEMP save dir
+    lora_weights, lora_nf = train_lora_regression(base_nf, target_data_sampler, loss_fn, lora_rank, save_dir=save_dir, max_n_steps=5000) # TEMP save dir
     breakpoint()
 
 # ### LORA EDITING ###
