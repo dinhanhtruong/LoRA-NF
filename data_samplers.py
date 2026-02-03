@@ -12,13 +12,13 @@ from util import save_mesh
 import pysdf
 
 class DataSampler:
-    def sample_batch(self, n_samples: int, device: str):
+    def sample_batch(self, n_samples: int, device: torch.device):
         """
         samples input positions and corresponding field values
         
         Args
             - n_samples: number of samples
-            - device: name of device (e.g. "cpu", "cuda:0") on which the sampled data will live
+            - device: torch device (e.g. "cpu", "cuda:0") on which the sampled data will live
 
         Returns:
             - inputs: sample positions. torch tensor of shape [n_samples, data_input_dim], e.g., [n_samples, 2] for image xy positions
@@ -37,7 +37,12 @@ class DataSampler:
         raise NotImplementedError
     
 class Image(DataSampler, torch.nn.Module):
-    def __init__(self, filename, device):
+    def __init__(self, filename: str, device: torch.device):
+        """
+        Args
+            - filename: path to image
+            - device: torch.device
+        """
         super().__init__()
         self.data = read_image(filename)
         # remove alpha channel
@@ -57,7 +62,7 @@ class Image(DataSampler, torch.nn.Module):
         ys = torch.linspace(half_dy, 1-half_dy, resolution[1])
         xv, yv = torch.meshgrid([xs, ys], indexing="ij")
         self.img_shape = resolution + torch.Size([self.data.shape[2]])
-        self.xy = torch.stack((yv.flatten(), xv.flatten())).t()
+        self.xy = torch.stack((yv.flatten(), xv.flatten())).t().to(device)
 
     def forward(self, xs, interpolate=True):
         with torch.no_grad():
@@ -86,7 +91,7 @@ class Image(DataSampler, torch.nn.Module):
     
     def sample_batch(self, n_samples, device):
         assert device == self.device
-        input_xy = torch.rand([n_samples, 2], dtype=torch.float) 
+        input_xy = torch.rand([n_samples, 2], dtype=torch.float, device=device) 
         image_rgb = self.forward(input_xy)
         return input_xy, image_rgb
 
@@ -95,7 +100,7 @@ class Image(DataSampler, torch.nn.Module):
 
 
 class SDF(DataSampler):
-    def __init__(self, path, device, num_samples=2**18, clip_sdf=None, transformation_save_dir=""):
+    def __init__(self, path: str, device: torch.device, num_samples=2**18, clip_sdf=None, transformation_save_dir=""):
         super().__init__()
         self.path = path
         self.device = self.device

@@ -87,15 +87,16 @@ def train_lora_regression(
         - lora_nf: nn.Sequential neural field with LoRA applied to every linear layer. Returns the iterate with the lowest loss.
     """
     # make sure that base_nf and target_sampler are compatible
+    device = get_device(base_nf)
     linear_layers = extract_linear_layers(base_nf)
     base_output_dim = linear_layers[-1].out_features
-    _, dummy_targets = target_sampler.sample_batch(batch_size)
+    _, dummy_targets = target_sampler.sample_batch(batch_size, device)
     assert dummy_targets.shape[-1] == base_output_dim, "base_nf and target_sampler are incompatible: output size mismatch"
     assert isinstance(base_nf, nn.Sequential)
     
     # set up lora neural field
     lora_nf = LoRA_MLP(base_nf, lora_rank)
-    device = get_device(base_nf)
+    lora_nf.to(device)
     print(f"training LoRA on {device}")
     trainable_params = sum(p.numel() for p in lora_nf.parameters() if p.requires_grad)
     print(f"# trainable LoRA parameters: {trainable_params}")
@@ -114,7 +115,7 @@ def train_lora_regression(
         os.makedirs(save_dir, exist_ok=True)
 
     for i in range(max_n_steps):
-        batch_inputs, batch_targets = target_sampler.sample_batch(batch_size) # [B,in], [B,out]
+        batch_inputs, batch_targets = target_sampler.sample_batch(batch_size, device) # [B,in], [B,out]
         output = lora_nf(batch_inputs.to(device))
         loss = loss_fn(output, batch_targets.to(device))
 
@@ -199,7 +200,7 @@ def train_base_model(
         os.makedirs(save_dir, exist_ok=True)
 
     for i in range(max_n_steps):
-        batch_inputs, batch_targets = data_sampler.sample_batch(batch_size) # [B,in], [B,out]
+        batch_inputs, batch_targets = data_sampler.sample_batch(batch_size, device) # [B,in], [B,out]
         output = base_nf(batch_inputs.to(device))
         loss = loss_fn(output, batch_targets.to(device))
 
@@ -255,7 +256,7 @@ def image_demo():
     save_dir = "checkpoints/minimal"
     base_image_path= "data/images/table/table_before.png"
     target_image_path= "data/images/table/table_after.png"
-    device = "cpu"
+    device = torch.device("cuda:0")
 
     # set up base model
     pos_enc = CustomFrequencyEncoding()
@@ -270,13 +271,15 @@ def image_demo():
         nn.Linear(32, 3), # RGB output 
     )
     base_nf.to(device)
+    print("specified device: ", device)
+    print("base nf device: ", get_device(base_nf))
     base_data_sampler = Image(base_image_path, device)
     loss_fn = mean_relative_l2 
-    base_nf = train_base_model(base_nf, base_data_sampler, loss_fn, save_dir=save_dir, max_n_steps=10000)
+    base_nf = train_base_model(base_nf, base_data_sampler, loss_fn, save_dir=save_dir, max_n_steps=2000)
     
     #########################
     # train lora
-    target_data_sampler = Image(target_image_path, get_device(base_nf))   # SDF(target_geometry_path, device) # TODO use base nf device
+    target_data_sampler = Image(target_image_path, get_device(base_nf))   # SDF(target_geometry_path, device) 
     lora_rank = 3
 
     # breakpoint()
