@@ -29,7 +29,7 @@ base_image_path= "data/images/table/table_before.png"
 target_image_path= "data/images/table/table_after.png"
 device = torch.device("cuda:0")
 
-# set up base model
+# train base neural field
 pos_enc = CustomFrequencyEncoding()
 base_nf = nn.Sequential(
     pos_enc,
@@ -50,7 +50,6 @@ base_data_sampler = Image(base_image_path, device)
 loss_fn = mean_relative_l2 
 base_nf = train_base_model(base_nf, base_data_sampler, loss_fn, save_dir=save_dir, max_n_steps=100000)
 
-#######################################################
 # train LoRA (outputs are saved in checkpoints/minimal/)
 target_data_sampler = Image(target_image_path, get_device(base_nf)) 
 lora_rank = 16
