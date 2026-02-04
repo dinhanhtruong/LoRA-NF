@@ -1,5 +1,5 @@
 # LoRA-NF
-This small python package implements the method from [Low-Rank Adaptation of Neural Fields](https://dl.acm.org/doi/10.1145/3757377.3763882).
+This python package implements the method from [Low-Rank Adaptation of Neural Fields](https://dl.acm.org/doi/10.1145/3757377.3763882).
 
 In particular, it provides a simple function ```train_lora_regression()``` for adapting any MLP-based neural field (implemented as a ```torch.nn.Sequential()```) to new data using low-rank adaptations (LoRA). 
 
@@ -61,4 +61,22 @@ lora_weights, lora_nf = train_lora_regression(base_nf, target_data_sampler, loss
 You can run the example above using 
 ```
 python examples/image_edit_demo.py
-```  
+```
+
+## Citation
+```
+@inproceedings{Truong:2025:LRA,
+  title     = {Low-Rank Adaptation of Neural Fields},
+  author    = {Anh Truong and Ahmed H.\ Mahmoud and Mina Konakovi\'{c} Lukovi\'{c} and Justin Solomon},
+  year      = {2025},
+  isbn      = {9798400721373},
+  publisher = {Association for Computing Machinery},
+  address   = {New York, NY, USA},
+  articleno = {86},
+  numpages  = {12},
+  month     = dec,
+  series    = {SIGGRAPH Asia Conference Papers '25},
+  booktitle = {Proceedings of the SIGGRAPH Asia 2025 Conference Papers},
+  doi       = {10.1145/3757377.3763882}
+}
+```
