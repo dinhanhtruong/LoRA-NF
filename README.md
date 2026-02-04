@@ -15,6 +15,7 @@ pip install lora-nf
 
 ## Simple Example
 The code snippet below (see ```examples/image_edit_demo.py```) shows how this library can be used to (1) train a base image/RGB neural field and (2) fine-tune the base neural field to regress an edited image.
+
 ```python
 import torch
 import torch.nn as nn
