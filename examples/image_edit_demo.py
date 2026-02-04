@@ -35,14 +35,13 @@ def image_demo():
     base_nf = train_base_model(base_nf, base_data_sampler, loss_fn, save_dir=save_dir, max_n_steps=100000)
     
     #########################
-    # train lora
+    # train lora (outputs are saved in checkpoints/minimal/)
     target_data_sampler = Image(target_image_path, get_device(base_nf)) 
     lora_rank = 16
 
-    # breakpoint()
     lora_weights, lora_nf = train_lora_regression(base_nf, target_data_sampler, loss_fn, lora_rank, save_dir=save_dir, max_n_steps=30000)
-    breakpoint()
-
+    
+    print("Done!")
 
 if __name__ == "__main__":
     # this should be run from the project root

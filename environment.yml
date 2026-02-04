@@ -3,6 +3,8 @@ channels:
   - defaults
 dependencies:
   - pytorch
+  - torchvision 
+  - torchaudio
   - numpy
   - packaging
   - pip
